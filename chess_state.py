@@ -7,7 +7,6 @@
 #  @copyright   - Copyright (c) 2021 
 
 import copy
-from pickle import EMPTY_DICT
 
 class ChessType(enumerate):
     """ 棋子状态类

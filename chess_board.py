@@ -6,11 +6,11 @@
 #  @date        - 2022.07.20
 #  @copyright   - Copyright (c) 2021 
 
-from PyQt5.QtCore import *
-from PyQt5.QtWidgets import *
-from PyQt5.QtGui import *
-import sip
-from chess_button import ChessButton, TargetButton
+from PyQt5 import QtCore
+from PyQt5.QtWidgets import QWidget
+from PyQt5.QtWidgets import QSizePolicy
+from PyQt5.QtCore import Qt, QSize, QDateTime, QTimer, pyqtSignal, QRect, QPoint, pyqtSlot
+from PyQt5.QtGui import QColor, QMouseEvent, QResizeEvent, QPainter, QPen, QBrush
 
 from chess_state import ChessState, ChessType
 from copy import deepcopy
@@ -97,7 +97,7 @@ class ChessBoard(QWidget):
             self.clear_slot()
 
     def clear_slot(self):
-        """ 清除点集和当前状态
+        """ 清除当前状态
         """
         self.curr_state = None
         self.update()
@@ -138,41 +138,41 @@ class ChessBoard(QWidget):
         else:
             self.black_time_label.setText(str_m + ":" + str_s)
 
-    def _setup_buttons(self):
-        """ 绘制棋子，棋子本质为自定义按钮
-        """
-        begin_x = 10+INTERVAL * 2
-        begin_y = 10+INTERVAL * 2
-        for i in range(0, 24):
-            btn = ChessButton(self)
-            if i < 6:
-                btn.setup_view(False)
-                btn.setGeometry(begin_x + INTERVAL * i - CHESS_SIZE / 2,
-                                begin_y - CHESS_SIZE / 2,
-                                CHESS_SIZE,
-                                CHESS_SIZE)
-            elif i < 12:
-                btn.setup_view(False)
-                btn.setGeometry(begin_x + INTERVAL * (i - 6) - CHESS_SIZE / 2,
-                                begin_y + INTERVAL - CHESS_SIZE / 2,
-                                CHESS_SIZE,
-                                CHESS_SIZE)
-            elif i < 18:
-                btn.setup_view(True)
-                btn.setGeometry(begin_x + INTERVAL * (i - 12) - CHESS_SIZE / 2,
-                                begin_y + INTERVAL * 4 - CHESS_SIZE / 2,
-                                CHESS_SIZE,
-                                CHESS_SIZE)
-            else:
-                btn.setup_view(True)
-                btn.setGeometry(begin_x + INTERVAL * (i - 18) - CHESS_SIZE / 2,
-                                begin_y + INTERVAL * 5 - CHESS_SIZE / 2,
-                                CHESS_SIZE,
-                                CHESS_SIZE)
-            btn.setText(str(i + 1))
-            btn.tag = i + 1
-            btn.clicked.connect(self._click_btn_slot)
-            self.chess_list.append(btn)
+    # def _setup_buttons(self):
+    #     """ 绘制棋子，棋子本质为自定义按钮
+    #     """
+    #     begin_x = 10+INTERVAL * 2
+    #     begin_y = 10+INTERVAL * 2
+    #     for i in range(0, 24):
+    #         btn = ChessButton(self)
+    #         if i < 6:
+    #             btn.setup_view(False)
+    #             btn.setGeometry(begin_x + INTERVAL * i - CHESS_SIZE / 2,
+    #                             begin_y - CHESS_SIZE / 2,
+    #                             CHESS_SIZE,
+    #                             CHESS_SIZE)
+    #         elif i < 12:
+    #             btn.setup_view(False)
+    #             btn.setGeometry(begin_x + INTERVAL * (i - 6) - CHESS_SIZE / 2,
+    #                             begin_y + INTERVAL - CHESS_SIZE / 2,
+    #                             CHESS_SIZE,
+    #                             CHESS_SIZE)
+    #         elif i < 18:
+    #             btn.setup_view(True)
+    #             btn.setGeometry(begin_x + INTERVAL * (i - 12) - CHESS_SIZE / 2,
+    #                             begin_y + INTERVAL * 4 - CHESS_SIZE / 2,
+    #                             CHESS_SIZE,
+    #                             CHESS_SIZE)
+    #         else:
+    #             btn.setup_view(True)
+    #             btn.setGeometry(begin_x + INTERVAL * (i - 18) - CHESS_SIZE / 2,
+    #                             begin_y + INTERVAL * 5 - CHESS_SIZE / 2,
+    #                             CHESS_SIZE,
+    #                             CHESS_SIZE)
+    #         btn.setText(str(i + 1))
+    #         btn.tag = i + 1
+    #         btn.clicked.connect(self._click_btn_slot)
+    #         self.chess_list.append(btn)
     
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.LeftButton: 

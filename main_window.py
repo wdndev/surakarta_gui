@@ -3,7 +3,6 @@ from PyQt5.QtWidgets import QWidget, QApplication, QGridLayout, QMainWindow, QLa
 from PyQt5.QtWidgets import QSizePolicy,  QTextBrowser
 from PyQt5.QtCore import Qt,QSize, QTimer, QTime, pyqtSlot
 from PyQt5.QtGui import QIcon, QPixmap
-from PyQt5 import uic
 
 from chess_board import ChessBoard, INTERVAL
 from chess_controller import ChessController
