@@ -6,6 +6,8 @@ from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5 import uic
 
 from chess_board import ChessBoard, INTERVAL
+from chess_controller import ChessController
+from chess_state import ChessState, ChessType
 
 from functools import partial
 
@@ -27,25 +29,32 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         self._player = -1
         # 设置窗口
         self.setting = GameSetting()
+        self.game = ChessController()
 
         
 
         # 信号连接
-        ## 菜单栏 游戏按钮
-
-        ## 菜单栏 设置按钮
+        ## 菜单栏 
+        self.game_new_act.triggered.connect(self.start_new_game_slot)
+        self.game_quit_act.triggered.connect(self.game_over_slot)
         self.game_setting_act.triggered.connect(self.game_setting)
-
-        ## 菜单栏 帮助按钮
         self.game_rule_act.triggered.connect(self.game_rule)
 
         ## 设置界面
-        self.setting.setting_change_signal.connect(partial(self.game_board_widget.select_first_radio))
-        
-    @pyqtSlot()
-    def test_slot(self, a:int):
-        print("aaaaaaaaaaa: ", a)
+        self.setting.setting_change_signal.connect(partial(self.game.select_first_radio))
 
+        ## 游戏控制和棋盘显示信号
+        self.game.state_change_signal.connect(partial(self.game_board_widget.set_state_slot))
+        self.game.state_change_signal.connect(partial(self.updata_chess_num))
+
+        ## 中央显示组件信号
+        self.pushButton_restart.clicked.connect(self.start_new_game_slot)
+        self.pushButton_regret.clicked.connect(self.game.regret_chess_slot)
+
+
+
+        
+        
     def init_ui(self):
         """ 初始化界面
         """
@@ -56,15 +65,52 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         tool_new_game = QToolButton(self)
         tool_new_game.setIcon(QIcon("res/icons/icon.png"))
         tool_new_game.setToolTip("新游戏")
+        tool_new_game.clicked.connect(self.start_new_game_slot)
         tool_setting = QToolButton(self)
         tool_setting.setIcon(QIcon("res/icons/setting.png"))
         tool_setting.setToolTip("设置")
         tool_setting.clicked.connect(self.game_setting)
+        tool_rule = QToolButton(self)
+        tool_rule.setIcon(QIcon("res/icons/rule.png"))
+        tool_rule.setToolTip("规则")
+        tool_rule.clicked.connect(self.game_rule)
+        tool_test = QToolButton(self)
+        tool_test.setIcon(QIcon("res/icons/test.png"))
+        tool_test.setToolTip("测试")
+        tool_test.clicked.connect(self.chess_state_test)
+        tool_test2 = QToolButton(self)
+        tool_test2.setIcon(QIcon("res/icons/test.png"))
+        tool_test2.setToolTip("测试2")
+        tool_test2.clicked.connect(self.chess_state_test2)
 
         self.toolBar.addWidget(tool_new_game)
         self.toolBar.addWidget(tool_setting)
+        self.toolBar.addWidget(tool_rule)
+        self.toolBar.addWidget(tool_test)
+        self.toolBar.addWidget(tool_test2)
+
+        # 界面组件
+        self.red_time_label.setText("00:00")
+        self.red_time_label.setStyleSheet("color: red")
+
+        self.black_time_label.setText("00:00")
+        self.black_time_label.setStyleSheet("color: black")
 
         # 状态栏
+        self.black_icon = QLabel()
+        self.black_icon.setPixmap(QPixmap("res/icons/blacklabel.png"))
+        self.statusbar.addWidget(self.black_icon)
+
+        self.black_label = QLabel()
+        self.statusbar.addWidget(self.black_label)
+
+        self.red_icon = QLabel()
+        self.red_icon.setPixmap(QPixmap("res/icons/redlabel.png"))
+        self.statusbar.addWidget(self.red_icon)
+
+        self.red_label = QLabel()
+        self.statusbar.addWidget(self.red_label)
+
         self.spacer = QWidget()
         self.spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
         self.statusbar.addWidget(self.spacer, 1)
@@ -77,89 +123,58 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         self.timer = QTimer()
         self.timer.timeout.connect(self.time_changed_slot)
         self.timer.start(1000)
-        self.red_time_label.setText("00:00")
-        self.red_time_label.setStyleSheet("color: red")
 
-        self.black_time_label.setText("00:00")
-        self.black_time_label.setStyleSheet("color: black")
-        
+    
+    @pyqtSlot()
+    def start_new_game_slot(self):
+        """ 开始新的游戏
+        """
+        self.my_chess_color = ChessType.RED
+        rival_chess_color = None
+        if self.my_chess_color == ChessType.RED:
+            rival_chess_color = ChessType.BLACK
+        else:
+            rival_chess_color = ChessType.RED
+        self.game.start_game(rival_chess_color)
+    
+    @pyqtSlot()
+    def game_over_slot(self):
+        """ 程序结束
+        """
+        self.game.game_over()
+        self.close()
 
-    # def init_ui(self):
-    #     # 窗口初始化
-    #     self.setWindowTitle("苏拉卡尔塔（Surakarta）")  # 窗口名称
-    #     self.setWindowIcon(QIcon("res/icons/icon.png"))  # 窗口图标
-    #     # 窗口大小: 430*400
-    #     self.resize(470, 550)                            # 窗口大小: 430*400,  窗口可以随着内容自动变化长度
-    #     self.setMinimumSize(QSize(0, 0))                 # 窗口最小的大小
-    #     self.setMaximumSize(QSize(16777215, 16777215))   # 窗口最大的大小
+    @pyqtSlot()
+    def game_win_slot(self, win_color:ChessType):
+        """ 游戏结束
+        """
+        string = None
+        if win_color == self.my_chess_color:
+            string = "我方胜利！ \n再来一局？"
+        else:
+            string = "对方胜利！ \n再来一局？"
+        ret = QMessageBox.question(self, '结果', string, QMessageBox.Yes | QMessageBox.No)
+        if ret == QMessageBox.Yes:
+            self.start_new_game_slot()
+        else:
+            self.game_over_slot()
 
-    #     # 菜单栏设置
-    #     self.menuBar = self.menuBar()
-    #     game_menu = self.menuBar.addMenu("游戏")
-    #     game_menu.addAction(QIcon("res/icons/icon1.png"), "新游戏")
-    #     game_menu.addAction(QIcon("res/icons/reset.png"), "重新开始")
-    #     game_menu.addAction(QIcon("res/icons/close.png"), "退出")
-
-    #     setting_menu = self.menuBar.addMenu("设置")
-
-    #     help_menu = self.menuBar.addMenu("帮助")
-    #     help_menu.addAction(QIcon(""), "游戏规则", self.game_rule)
-    #     help_menu.addAction(QIcon(""), "关于")
-    #     self.menuBar.addMenu(help_menu)
-        
-    #     # 工具栏设置
-    #     lift_tool_bar = QToolBar(self)
-    #     pointer_reset = QToolButton(self)
-    #     pointer_reset.setIcon(QIcon("res/icons/icon.png"))
-    #     pointer_reset.setToolTip("新游戏")
-    #     pointer_reset2 = QToolButton(self)
-    #     pointer_reset2.setIcon(QIcon("res/icons/setting.png"))
-    #     pointer_reset2.setToolTip("设置")
-
-    #     lift_tool_bar.addWidget(pointer_reset)
-    #     lift_tool_bar.addWidget(pointer_reset2)
-    #     lift_tool_bar.setAllowedAreas(Qt.ToolBarArea.LeftToolBarArea)
-    #     self.addToolBar(lift_tool_bar)
-
-    #     # 中央组件设置
-    #     self.window = ChessBoard()
-    #     self.setCentralWidget(self.window)
-
-    #     # 状态栏
-    #     self.statusBar = self.statusBar()
-
-    #     # self.white_icon = QLabel()
-    #     # self.white_icon.setPixmap(QPixmap("res/icons/whitelabel.png"))
-    #     # self.statusBar.addWidget(self.white_icon)
-
-    #     # self.white_label = QLabel()
-    #     # self.statusBar.addWidget(self.white_label)
-
-    #     # self.black_icon = QLabel()
-    #     # self.black_icon.setPixmap(QPixmap("res/icons/blacklabel.png"))
-    #     # self.statusBar.addWidget(self.black_icon)
-
-    #     # self.black_label = QLabel()
-    #     # self.statusBar.addWidget(self.black_label)
-
-    #     self.spacer = QWidget()
-    #     self.spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
-    #     self.statusBar.addWidget(self.spacer, 1)
-
-    #     self.time_label = QLabel()
-    #     self.time_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-    #     self.statusBar.addWidget(self.time_label)
-    #     self.time_label.setStyleSheet("color: black;")
-
-    #     self.timer = QTimer()
-    #     self.timer.timeout.connect(self.time_changed_slot)
-    #     self.timer.start(1000)
 
     @pyqtSlot()
     def time_changed_slot(self):
         """ 显示时间槽函数
         """
         self.time_label.setText(QTime.currentTime().toString("HH:mm:ss"))
+
+    
+    @pyqtSlot()
+    def updata_chess_num(self, state:ChessState):
+        """ 更新棋子计数器
+        """
+        self.game.calc_chess_counts(state)
+        if len(state.chess_counts) != 0:
+            self.red_label.setText("<b><font color=red>{}</font></b>".format(state.counts()[0]))
+            self.black_label.setText("<b><font color=black>{}</font></b>".format(state.counts()[2]))
 
     @pyqtSlot()
     def game_rule(self):
@@ -177,33 +192,26 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         """ 游设置槽函数
         """
         self.setting.show()
+
+
     
-    def _did_click_btn(self, tag):
-        """ 棋子按钮按下回调函数
+    
+
+    @pyqtSlot()
+    def chess_state_test(self):
+        """ 游戏规则槽函数
         """
-        if self._is_game_begin is False:
-            return
-        # 判断是否轮到当前玩家下棋
-        if self._player == -1 and tag > 12 :
-            return
-        elif self._player == 1 and tag < 13:
-            return
-
-
-            
-
-    @staticmethod
-    def _get_chess_frame(x, y):
-        interval = INTERVAL
-        begin_x = interval * 2
-        begin_y = interval * 2
-        return begin_x + x * interval, begin_y + y * interval, x, y
-        
-        
-        
-
-
-
+        test_state = self.game.curr_state.copy()
+        test_state.chess_state[3][1] = ChessType.BLACK
+        test_state.chess_state[4][0] = ChessType.EMPTY
+        self.game.change_state(test_state)
+        # pass
+    @pyqtSlot()
+    def chess_state_test2(self):
+        """ 游戏规则槽函数
+        """
+        test_state = self.game.first_state.copy()
+        self.game.change_state(test_state)    
 
 if __name__ == '__main__':
     import sys

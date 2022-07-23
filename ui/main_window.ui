@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>707</width>
-    <height>544</height>
+    <height>560</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -19,13 +19,13 @@
   <property name="minimumSize">
    <size>
     <width>707</width>
-    <height>544</height>
+    <height>560</height>
    </size>
   </property>
   <property name="maximumSize">
    <size>
     <width>707</width>
-    <height>544</height>
+    <height>560</height>
    </size>
   </property>
   <property name="windowTitle">
@@ -215,8 +215,8 @@
     <property name="title">
      <string>游戏</string>
     </property>
-    <addaction name="new_game_act"/>
-    <addaction name="quit_game_act"/>
+    <addaction name="game_new_act"/>
+    <addaction name="game_quit_act"/>
    </widget>
    <widget class="QMenu" name="menu_2">
     <property name="title">
@@ -257,12 +257,12 @@
     <string>关于</string>
    </property>
   </action>
-  <action name="new_game_act">
+  <action name="game_new_act">
    <property name="text">
     <string>新游戏</string>
    </property>
   </action>
-  <action name="quit_game_act">
+  <action name="game_quit_act">
    <property name="text">
     <string>退出</string>
    </property>

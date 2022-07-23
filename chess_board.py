@@ -12,6 +12,9 @@ from PyQt5.QtGui import *
 import sip
 from chess_button import ChessButton, TargetButton
 
+from chess_state import ChessState, ChessType
+from copy import deepcopy
+
 INTERVAL = 50
 LONG_RADIUS = INTERVAL * 4
 SHORT_RADIUS = INTERVAL * 2
@@ -19,77 +22,87 @@ CHESS_SIZE = 35
 
 
 class ChessBoard(QWidget):
+    """ 棋盘类
+    """
+
+    """ 信号
+    """
+    mouse_clicked_signal = pyqtSignal(int, int)
 
     def __init__(self, *__args):
         super().__init__(*__args)
-        # 棋子点击时，回调函数
-        self.click_callback = None
-        # 
-        self.target_click_callback = None
-        # 移动棋子回调函数
-        self.chess_move_callback = None
-        # 游戏开始回调函数，参数为 self._is_rival_first_go
-        self.game_begin_callback = None
-        # 改变下棋模式回调函数，1：人人； 2：人机
-        self.change_mode_callback = None
-        # 生成棋谱回调函数
-        self.gen_callback = None    
-        self.targets = []
-        # 棋盘上棋子列表
-        self.chess_list = []
+
+        self.chess_size = 6             # 棋盘大小
+        self.curr_state = None          # 当前棋盘状态
+        self.zoom = 18
+
+        # self.first_state = ChessState(self.chess_size)
+        # for i in range(0, 2):
+        #     for j in range(0, self.chess_size):
+        #         self.first_state.chess_state[i][j] = ChessType.BLACK
+        
+        # for i in range(4, 6):
+        #     for j in range(0, self.chess_size):
+        #         self.first_state.chess_state[i][j] = ChessType.RED
+        
+        # self.curr_state = self.first_state.copy()
+
+        self.rival_chess_color = None
+
+
+        # # 棋子点击时，回调函数
+        # self.click_callback = None
+        # # 
+        # self.target_click_callback = None
+        # # 移动棋子回调函数
+        # self.chess_move_callback = None
+        # # 游戏开始回调函数，参数为 self._is_rival_first_go
+        # self.game_begin_callback = None
+        # # 改变下棋模式回调函数，1：人人； 2：人机
+        # self.change_mode_callback = None
+        # # 生成棋谱回调函数
+        # self.gen_callback = None    
+        # self.targets = []
+        # # 棋盘上棋子列表
+        # self.chess_list = []
         # player 为 -1代表红色方正在下棋，1 代表黑色方正在下棋
         self._player = -1
-        # 是否对手先手标志位
-        self._is_rival_first_go = False
-        # self._init_view()
-        # 定时器初始化
-        self._init_timer()
-        # 棋子按钮初始化
-        self._setup_buttons()
+        
+        # # self._init_view()
+        # # 定时器初始化
+        # self._init_timer()
+        # # 棋子按钮初始化
+        # self._setup_buttons()
 
-    # def _init_view(self):
-    #     self._setup_buttons()
-    #     self.human_radio = QRadioButton("人人", self)
-    #     self.human_radio.setGeometry(INTERVAL * 10, 0, 100, 25)
-    #     self.ai_radio = QRadioButton("人机", self)
-    #     self.ai_radio.setGeometry(INTERVAL * 10 + 100, 0, 100, 25)
-    #     mode_button_group = QButtonGroup(self)
-    #     mode_button_group.addButton(self.human_radio, 1)
-    #     mode_button_group.addButton(self.ai_radio, 2)
-    #     mode_button_group.buttonClicked.connect(self._select_mode_radio)
-    #     self.first_human_radio = QRadioButton("人先手", self)
-    #     self.first_human_radio.setGeometry(INTERVAL * 10, 35, 100, 25)
-    #     self.first_human_radio.hide()
-    #     self.first_ai_radio = QRadioButton("机先手", self)
-    #     self.first_ai_radio.setGeometry(INTERVAL * 10 + 100, 35, 100, 25)
-    #     self.first_ai_radio.hide()
-    #     first_button_group = QButtonGroup(self)
-    #     first_button_group.addButton(self.first_human_radio, 1)
-    #     first_button_group.addButton(self.first_ai_radio, 2)
-    #     first_button_group.buttonClicked.connect(self.select_first_radio)
-    #     self.begin_button = QPushButton(self)
-    #     self.begin_button.setStyleSheet("QPushButton{border-radius: 10; background-color: white; color: black;}"
-    #                                     "QPushButton:hover{background-color: lightgray}")
-    #     self.begin_button.setText("开始")
-    #     self.begin_button.setGeometry(INTERVAL * 10, 70, 200, 25)
-    #     self.begin_button.clicked.connect(self._click_begin_button)
-    #     self.gen_button = QPushButton(self)
-    #     self.gen_button.setStyleSheet("QPushButton{border-radius: 10; background-color: white; color: black;}"
-    #                                   "QPushButton:hover{background-color: lightgray}")
-    #     self.gen_button.setText("生成棋谱")
-    #     self.gen_button.setGeometry(INTERVAL * 10, 100, 200, 25)
-    #     self.gen_button.clicked.connect(self._click_gen_button)
-    #     self.red_time_label = QLabel(self)
-    #     self.red_time_label.setText("00:00")
-    #     self.red_time_label.setStyleSheet("color: red")
-    #     self.red_time_label.setGeometry(INTERVAL * 10, 130, 100, 25)
-    #     self.black_time_label = QLabel(self)
-    #     self.black_time_label.setText("00:00")
-    #     self.black_time_label.setStyleSheet("color: black")
-    #     self.black_time_label.setGeometry(INTERVAL * 10 + 100, 130, 100, 25)
-    #     self.list_widget = QListWidget(self)
-    #     self.list_widget.setGeometry(INTERVAL * 10, 160, 200, 300)
+    def copy(self):
+        """ 深拷贝
+        """
+        return deepcopy(self)
+    
+    def state(self) -> ChessState:
+        """ 返回现在的状态
+        """
+        return self.curr_state
 
+    def set_state_slot(self, state:ChessState):
+        """ 设置棋局状态
+        """
+        # print(state.size())
+        if state != None:
+            self.curr_state = state
+            # print(state.size())
+            self.chess_size = state.size()
+            self.repaint()
+        else :
+            self.clear_slot()
+
+    def clear_slot(self):
+        """ 清除点集和当前状态
+        """
+        self.curr_state = None
+        self.update()
+
+    
     def _init_timer(self):
         """ 初始化定时器，用于移动棋子计时
         """
@@ -98,123 +111,6 @@ class ChessBoard(QWidget):
         self._timer = QTimer(self)
         self._timer.setInterval(1000)
         self._timer.timeout.connect(self._timer_operate_slot)
-
-    def show_game_end(self, player):
-        """ 判断获胜方
-        """
-        if player == -1:
-            message = "红方获胜"
-        else:
-            message = "黑方获胜"
-        print(message)
-
-    def show_targets(self, frames):
-        """ 显示目标棋子区域
-        """
-        self.remove_all_targets()
-        for frame in frames:
-            btn = TargetButton(self)
-            btn.setup_frame(frame)
-            btn.clicked.connect(self._click_target_btn)
-            btn.show()
-            self.targets.append(btn)
-
-    def remove_all_targets(self):
-        """ 移除目标棋子区域
-        """
-        for btn in self.targets:
-            btn.hide()
-            sip.delete(btn)     # 彻底删除Widget()控件
-        self.targets.clear()
-
-    def remove_chess(self, tag):
-        """ 重新移动棋子
-        """
-        for btn in self.chess_list:
-            if btn.tag == tag:
-                self.chess_list.remove(btn)
-                btn.hide()
-                sip.delete(btn) # 彻底删除Widget()控件
-                break
-
-    def move_chess(self, chess_tag, to_frame):
-        """ 移动棋子
-        """
-        self._player = -self._player
-        for chess in self.chess_list:
-            if chess_tag == chess.tag:
-                chess.move(to_frame[1] - CHESS_SIZE / 2, to_frame[0] - CHESS_SIZE / 2)
-                # 移动完棋子要回调修改棋盘数据
-                self.chess_move_callback(to_frame)
-                return
-
-    def add_move_info(self, tag: int, f: tuple, t: tuple):
-        text = "tag {tag}: ({fx}, {fy}) -> ({tx}, {ty})".format(tag=tag,
-                                                                fx=f[0],
-                                                                fy=f[1],
-                                                                tx=t[0],
-                                                                ty=t[1])
-        item = QListWidgetItem(text)
-        self.list_widget.addItem(item)
-
-    
-    @pyqtSlot()
-    def _click_gen_button(self):
-        self.gen_callback()
-
-    @pyqtSlot()
-    def _click_btn_slot(self):
-        """ 按钮槽函数处理
-            使用回调函数处理点击的按钮，参数为按钮标号
-        """
-        print("tag: ", self.sender().tag)
-        print("x: ", self.sender().x())
-        print("y: ", self.sender().y())
-        print(type(self.sender().y()))
-        # x = self.sender().x
-        # y = self.sender().y
-        # interval = INTERVAL
-        # begin_x = interval * 2
-        # begin_y = interval * 2
-        # print("111: ", int(begin_x + x * interval))
-        # print("222: ", int(begin_y + y * interval))
-        # self.click_callback(self.sender().tag)
-
-    @pyqtSlot()
-    def _click_target_btn(self):
-        self.target_click_callback(self.sender().x, self.sender().y)
-
-    @pyqtSlot()
-    def _select_mode_radio(self):
-        if self.sender().checkedId() == 1:
-            self.first_human_radio.hide()
-            self.first_ai_radio.hide()
-            self.change_mode_callback(1)
-        else:
-            self.first_human_radio.show()
-            self.first_ai_radio.show()
-            self.change_mode_callback(2)
-
-    @pyqtSlot()
-    def _click_begin_button(self):
-        self._player = 1
-        self._timer.start()
-        self.begin_button.setEnabled(False)
-        self.ai_radio.setEnabled(False)
-        self.human_radio.setEnabled(False)
-        self.first_human_radio.setEnabled(False)
-        self.first_ai_radio.setEnabled(False)
-        self.game_begin_callback(self._is_rival_first_go)
-
-    @pyqtSlot()
-    def select_first_radio(self, game_name, game_addr, state):
-        """ 选择是否先手
-        """
-        if state == Qt.Checked:
-            self._is_rival_first_go = False
-        else:
-            self._is_rival_first_go = True
-        print("state: ", state)
 
     @pyqtSlot()
     def _timer_operate_slot(self):
@@ -280,15 +176,27 @@ class ChessBoard(QWidget):
     
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.LeftButton: 
-            print("event.pos:", event.pos())
+            begin_x = 10 + INTERVAL * 2 - 18
+            begin_y = 10 + INTERVAL * 2 - 18
+            row = int( int((event.pos().y() - begin_y) * (self.chess_size) / 300))
+            col = int((event.pos().x() - begin_x) * (self.chess_size) / 300)
+            # print("event.pos:", event.pos())
+            print("coord: row:{}, col:{}".format(row, col))
+            self.mouse_clicked_signal.emit(int(row),int(col))
 
     def paintEvent(self, QPaintEvent):
         """ 重写绘图函数，绘制棋盘
         """
         painter = QPainter(self)
+
+        deep_gree = QColor(0x00, 0x7c, 0x00, 255)
+        blue = QColor(0x00, 0xcc, 0xff, 255)
+        yellow = QColor(0xfc, 0xfe, 0x00, 255)
+        black = QColor(0x00, 0x00, 0x00, 255)
+        red = QColor(0xff, 0x00, 0x00, 255)
        
         # 深绿色 007C00
-        pen = QPen(QColor(0x00, 0x7c, 0x00, 200), 5, Qt.SolidLine)
+        pen = QPen(deep_gree, 5, Qt.SolidLine)
         painter.setPen(pen)
         ## 左上
         painter.drawArc(10, 10, LONG_RADIUS, LONG_RADIUS, 0, 270 * 16)
@@ -306,7 +214,7 @@ class ChessBoard(QWidget):
         painter.drawLine(10+INTERVAL * 2, 10+INTERVAL * 5, 10+INTERVAL * 7, 10+INTERVAL * 5)
 
         # 蓝色 #00CCFF
-        pen.setColor(QColor(0x00, 0xcc, 0xff, 200))
+        pen.setColor(blue)
         painter.setPen(pen)
         ## 左上
         painter.drawArc(10+INTERVAL, 10+INTERVAL, SHORT_RADIUS, SHORT_RADIUS, 0, 270 * 16)
@@ -324,7 +232,7 @@ class ChessBoard(QWidget):
         painter.drawLine(10+INTERVAL * 2, 10+INTERVAL * 6, 10+INTERVAL * 7, 10+INTERVAL * 6)
 
         # 黄线 FCFE00
-        pen.setColor(QColor(0xfc, 0xfe, 0x00, 200))
+        pen.setColor(yellow)
         painter.setPen(pen)
         ## 竖线
         painter.drawLine(10+INTERVAL * 2, 10+INTERVAL * 2, 10+INTERVAL * 2, 10+INTERVAL * 7)
@@ -332,6 +240,25 @@ class ChessBoard(QWidget):
         ## 横线
         painter.drawLine(10+INTERVAL * 2, 10+INTERVAL * 2, 10+INTERVAL * 7, 10+INTERVAL * 2)
         painter.drawLine(10+INTERVAL * 2, 10+INTERVAL * 7, 10+INTERVAL * 7, 10+INTERVAL * 7)
+
+        # 如果棋局状态发生了改变
+        begin_x = 10 + INTERVAL * 2
+        begin_y = 10 + INTERVAL * 2
+        if self.curr_state is not None:
+            painter.setPen(QPen(QColor(0x00, 0x00, 0x00, 0), self.zoom * 0.0025))
+            for row in range(0, self.chess_size):
+                for col in range(0, self.chess_size):
+                    # 画红棋子
+                    coord_row = begin_y + INTERVAL * col
+                    coord_col = begin_x + INTERVAL * row
+                    painter.setBrush(QBrush(red))
+                    if self.curr_state.at(row, col) == ChessType.RED:
+                        painter.drawEllipse(QPoint(coord_row, coord_col), self.zoom, self.zoom)
+                    
+                    # 画黑棋子
+                    painter.setBrush(QBrush(black))
+                    if self.curr_state.at(row, col) == ChessType.BLACK:
+                        painter.drawEllipse(QPoint(coord_row, coord_col), self.zoom, self.zoom)
 
 
         # # 左上

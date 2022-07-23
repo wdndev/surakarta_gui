@@ -1,164 +1,158 @@
-
-from PyQt5.QtWidgets import QGridLayout
-# from surakarta.game import Game
-# from fortytwo.core import Core
-import copy
-import datetime
-
-# from application.view import main_window
-# from application.view import game_view
+# -*- coding: utf-8 -*-
+#  @file        - chess_controller.py
+#  @author      - dongnian.wang(dongnian.wang@outlook.com)
+#  @brief       - 国际跳棋逻辑控制类
+#  @version     - 0.0
+#  @date        - 2022.07.06
+#  @copyright   - Copyright (c) 2021 
 
 from chess_board import ChessBoard
+from chess_state import ChessState, ChessPoint, ChessType
 
+from PyQt5.QtCore import QObject, QPoint, pyqtSignal, Qt, pyqtSlot
+from PyQt5.QtWidgets import QMessageBox
+from PyQt5 import QtCore
 
-class GameController:
+from collections import deque
 
-    def __init__(self):
-        self.window = main_window.MainWindow()
-        self.selected_tag = 0
-        self.move_list = []
-        self._player = 1  # player的值同 chess.camp 为-1和1
-        self._init_view()
-        self.game = None
-        # self.game.reset_board()
-        self._is_ai_mode = True
-        self._ai_core = None
-        self._is_game_begin = False
-        self._step_num = 0
+class ChessController(QObject):
+    """ 游戏控制类
+    """
 
-    def app_launch(self):
-        self.window.show()
+    """ 信号
+    """
+    state_change_signal = pyqtSignal(ChessState)
+    game_end_signal = pyqtSignal(int)
 
-    def _init_view(self):
-        layout = QGridLayout()
-        self.game_view = game_view.GameView()
-        layout.addWidget(self.game_view)
-        self.window.setLayout(layout)
-        self.game_view.click_callback = self._did_click_btn
-        self.game_view.target_click_callback = self._did_click_target_btn
-        self.game_view.chess_move_callback = self._chess_did_move
-        self.game_view.game_begin_callback = self._game_begin
-        self.game_view.change_mode_callback = self._change_game_mode
-        self.game_view.gen_callback = self._gen_chess_board_info
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        """ 初始化
+        """
+        self.chess_size = 6
+        self.chess_row = 2
 
-    def _did_click_btn(self, tag):
-        if self._is_game_begin is False:
-            return
-        tag = int(tag)
-        # AI模式下就不让对方可以点击了
-        if self._is_ai_mode:
-            if self._ai_core.ai_camp == -1 and tag < 13:
-                return
-            elif self._ai_core.ai_camp == 1 and tag > 12:
-                return
-        # 判断是否轮到当前玩家下棋
-        if self._player == -1 and tag > 12:
-            return
-        elif self._player == 1 and tag < 13:
-            return
-        # 1. 获得点击棋子所有可下棋位置
-        array = self.game.get_chess_moves(tag)
-        if len(array) == 0:
-            return
-        frames = []
-        # 2. 获得可下棋位置的界面坐标
-        for info in array:
-            frames.append(self._get_chess_frame(info["to"].x, info["to"].y))
-        # 3. 展示目标位置
-        self.game_view.show_targets(frames)
-        self.selected_tag = tag
-        self.move_list = copy.deepcopy(array)
+        self.rival_chess_color = ChessType.BLACK    # 对手棋子颜色
+        self.my_chess_color = ChessType.RED         # 我方棋子颜色
 
-    def _did_click_target_btn(self, x, y):
-        # 1. 去除目标视图
-        self.game_view.remove_all_targets()
-        # 2. 移动棋子
-        self.game_view.move_chess(self.selected_tag, self._get_chess_frame(x, y))
+        self.first_state = None     # 游戏初始状态
+        self.curr_state= None       # 当前游戏状态
 
-    def _chess_did_move(self, frame):
-        for info in self.move_list:
-            if info["to"].x == frame[2] and info["to"].y == frame[3]:
-                if info["to"].camp != 0:
-                    # 吃子的情况需要移除被吃的棋子
-                    self.game_view.remove_chess(info["to"].tag)
-                # 数据层面移动棋子
-                self.game.do_move(info)
-                # 修改当前player
-                self._player = -self._player
-                self.game_view.add_move_info(info["from"].tag,
-                                             (info["from"].x, info["from"].y),
-                                             (info["to"].x, info["to"].y))
-                break
-        # 清理使用过的数据
-        self.selected_tag = 0
-        self.move_list.clear()
-        self._step_num += 1
-        win, player = self.game.has_winner()
-        if win:
-            self.game_view.show_game_end(player)
+        self.gamerunning = False
+
+        # 是否对手先手标志位
+        self._is_rival_first_go = False
+
+        self.game_running_queue = deque()
+
+    def start_game(self, rival_chess_color=ChessType.BLACK):
+        """ 游戏开始
+        """
+        self.rival_chess_color = rival_chess_color
+        if self.rival_chess_color == ChessType.BLACK:
+            self.my_chess_color = ChessType.RED
         else:
-            self._ai_go_if_need()
+            self.my_chess_color = ChessType.BLACK
+        
+        self.first_state = ChessState(self.chess_size)
+        for i in range(0, self.chess_row):
+            for j in range(0, self.chess_size):
+                self.first_state.chess_state[i][j] = ChessType.BLACK
+        for i in range(self.chess_size - self.chess_row, self.chess_size):
+            for j in range(0, self.chess_size):
+                self.first_state.chess_state[i][j] = ChessType.RED
 
-    def _game_begin(self, is_ai_first):
-        self._is_game_begin = True
-        self._ai_core.set_match(is_ai_first)
-        if is_ai_first:
-            self._ai_core.is_first = True
-            self._ai_core.ai_camp = 1
-            self._ai_go_if_need()
+        print("first: ", self.first_state.chess_state)
+        if self.curr_state is not None:
+            self.curr_state = None
+        self.curr_state = self.first_state.copy()
+
+        self.state_change_signal.emit(self.curr_state)
+        self.game_running_queue.append(self.first_state.copy())
+
+        self.gamerunning = True
+
+        if self._is_rival_first_go:
+            # 对手先走
+            pass
+        else :
+            # 我方走
+            pass
+
+    def game_over(self):
+        """ 游戏结束
+        """
+        self.gamerunning = False
+        if self.curr_state is not None:
+            self.curr_state = None
+        self.first_state = None
+
+    def who_win(self, state:ChessState) -> ChessType:
+        """ 判断输赢
+        """
+        if state.chess_state[2] == 0 or state.chess_state[3] == 0:
+            return ChessType.BLACK
+        if state.chess_state[0]  == 0 or state.chess_state[1] == 0:
+            return ChessType.RED
+
+        return ChessType.GOON
+
+    def calc_chess_counts(self, state:ChessState):
+        """ 统计各类棋子数目以及可移动数
+        """
+        state.clear_chess_counts()
+        for row in range(0, self.chess_size):
+            for col in range(0, self.chess_size):
+                if state.at(row, col) == ChessType.RED:
+                    state.chess_counts[0] += 1
+                elif state.at(row, col) == ChessType.BLACK:
+                    state.chess_counts[2] += 1
+                
+
+    @pyqtSlot()
+    def select_first_radio(self, game_name, game_addr, state):
+        """ 选择是否先手
+        """
+        if state == Qt.Checked:
+            self._is_rival_first_go = False
         else:
-            self._ai_core.ai_camp = -1
+            self._is_rival_first_go = True
+        print("state: ", state)
 
-    def _change_game_mode(self, mode):
-        self._is_ai_mode = mode == 2
-
-    def _gen_chess_board_info(self):
-        """生成棋谱"""
-        date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        begin_board = "!BBBBBB\n!BBBBBB\n!000000\n!000000\n!RRRRRR\n!RRRRRR\n"
-        place = "北京"
-        with open("info.txt", "a") as file:
-            file.write("#" + date + "|" + place + "\n")
-            file.write(begin_board)
-            info_list = self.game.record_info_list
-            line_number = ["A", "B", "C", "D", "E", "F"]
-            for info in info_list:
-                line = "B" if info["camp"] == -1 else "R"
-                line += str(info["from_x"]) + line_number[info["from_y"]]
-                line += "x" if info["is_attack"] is True else "-"
-                line += str(info["to_x"]) + line_number[info["to_y"]]
-                line += "\n"
-                file.write(line)
-            file.close()
-
-    def _ai_go_if_need(self):
-        if self._is_ai_go():
-            # 如果是AI模式下需要AI下棋了
-            board_info = self.game.last_board_info
-            if board_info is None:
-                board_info = {
-                    "board": self.game.chess_board,
-                    "red_num": 12,
-                    "blue_num": 12,
-                }
-            board_info.update({"step_num": self._step_num})
-            self._ai_core.playing(board_info, self._ai_go)
-
-    def _ai_go(self, info: dict):
-        self.game_view.remove_all_targets()
-        if info is None:
-            return
-        self.move_list.append(info)
-        self.game_view.move_chess(info["from"].tag, self._get_chess_frame(info["to"].x, info["to"].y))
-
-    def _is_ai_go(self):
-        if self._is_ai_mode and self._player == self._ai_core.ai_camp:
+    def _check_coord(self, coord) -> bool:
+        """ 检查坐标是否正确
+        """
+        if coord >= 0 and coord < self.chess_size:
             return True
         return False
+    
+    def change_state(self, state:ChessState):
+        """ 棋子移动
+        """
+        self.curr_state = state.copy()
+        self.game_running_queue.append(self.curr_state)
+        self.state_change_signal.emit(self.curr_state)
 
-    @staticmethod
-    def _get_chess_frame(x, y):
-        interval = game_view.INTERVAL
-        begin_x = interval * 2
-        begin_y = interval * 2
-        return begin_x + x * interval, begin_y + y * interval, x, y
+        win_chess_color = self.who_win(self.curr_state)
+        if win_chess_color != ChessType.GOON:
+            self.gamerunning = False
+            self.game_end_signal.emit(win_chess_color)
+
+    def regret_chess_slot(self):
+        """ 悔棋槽函数
+        """
+        if len(self.game_running_queue) == 1:
+            QMessageBox.warning(None, '警告', "已无法悔棋", QMessageBox.Yes | QMessageBox.No)
+            return
+        # print("333333333: ", len(self.checker_runing))
+        # print(self.curr_state.chess_state)
+        self.game_running_queue.pop()
+        self.curr_state = self.game_running_queue[-1]
+        # print("444444444: ", len(self.checker_runing))
+        # print(self.curr_state.chess_state)
+        self.state_change_signal.emit(self.curr_state)
+
+        win_chess_color = self.who_win(self.curr_state)
+        if win_chess_color != ChessType.GOON:
+            self.gamerunning = False
+            self.game_end_signal.emit(win_chess_color)
+
