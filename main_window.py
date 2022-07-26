@@ -22,10 +22,13 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         self.setupUi(self)
         self.init_ui()
 
+        # 定时器初始化
+        self._init_timer()
+
         # 游戏是否开始
         self._is_game_begin = False
-        # player 为 -1 代表红色方，1 代表黑色
-        self._player = -1
+        # player 为 1 代表红色方（自己），-1 代表黑色（对手）
+        self._player = 1
         # 设置窗口
         self.setting = GameSetting()
         self.game = ChessController()
@@ -40,18 +43,22 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         self.game_rule_act.triggered.connect(self.game_rule)
 
         ## 设置界面
-        self.setting.setting_change_signal.connect(partial(self.game.select_first_radio))
+        self.setting.setting_change_signal.connect(partial(self.select_first_radio))
 
         ## 游戏控制和棋盘显示信号
         self.game.state_change_signal.connect(partial(self.game_board_widget.set_state_slot))
         self.game.state_change_signal.connect(partial(self.updata_chess_num))
+        self.game.state_change_signal.connect(partial(self.updata_player))
 
         ## 中央显示组件信号
         self.pushButton_restart.clicked.connect(self.start_new_game_slot)
         self.pushButton_regret.clicked.connect(self.game.regret_chess_slot)
 
+        ## 鼠标点击事件信号连接
+        self.game_board_widget.mouse_clicked_signal.connect(self.game.mouse_clicked_slot)
 
 
+        # self.start_new_game_slot()
         
         
     def init_ui(self):
@@ -134,7 +141,8 @@ class MainWindow(Ui_MainWindow, QMainWindow):
             rival_chess_color = ChessType.BLACK
         else:
             rival_chess_color = ChessType.RED
-        self.game.start_game(rival_chess_color)
+        print("player1: ", self._player)
+        self.game.start_game(self._player, rival_chess_color)
     
     @pyqtSlot()
     def game_over_slot(self):
@@ -167,13 +175,27 @@ class MainWindow(Ui_MainWindow, QMainWindow):
 
     
     @pyqtSlot()
-    def updata_chess_num(self, state:ChessState):
+    def updata_chess_num(self, player:int, state:ChessState):
         """ 更新棋子计数器
         """
         self.game.calc_chess_counts(state)
         if len(state.chess_counts) != 0:
             self.red_label.setText("<b><font color=red>{}</font></b>".format(state.counts()[0]))
             self.black_label.setText("<b><font color=black>{}</font></b>".format(state.counts()[2]))
+
+    @pyqtSlot()
+    def updata_player(self, player:int, state:ChessState):
+        """ 更新玩家状态
+        """
+        self.red_time_label.setText("00:00")
+        self.black_time_label.setText("00:00")
+        self._red_time = 0
+        self._black_time = 0
+        self._player = player
+        # self._timer
+        # self._timer.setInterval(1000)
+        self._timer.start()
+        
 
     @pyqtSlot()
     def game_rule(self):
@@ -191,6 +213,56 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         """ 游设置槽函数
         """
         self.setting.show()
+
+
+    def _init_timer(self):
+        """ 初始化定时器，用于移动棋子计时
+        """
+        self._red_time = 0
+        self._black_time = 0
+        self._timer = QTimer(self)
+        self._timer.setInterval(1000)
+        self._timer.timeout.connect(self._timer_operate_slot)
+        # self._timer.start()
+
+    @pyqtSlot()
+    def _timer_operate_slot(self):
+        """ 移动棋子计时槽函数，
+            若 self._player == 1 对移动红色棋子计时；
+            若 self._player == -1 对移动黑色棋子计时
+        """
+        print("plsyer2:", self._player)
+        if self._player == 1:
+            self._red_time += 1
+        elif self._player == -1:
+            self._black_time += 1
+        time = self._red_time if self._player == 1 else self._black_time
+        m = int(time / 60)
+        if m < 10:
+            str_m = "0{m}".format(m=m)
+        else:
+            str_m = str(m)
+        s = time - m * 60
+        if s < 10:
+            str_s = "0{s}".format(s=s)
+        else:
+            str_s = str(s)
+        if self._player == 1:
+            self.red_time_label.setText(str_m + ":" + str_s)
+        else:
+            self.black_time_label.setText(str_m + ":" + str_s)
+
+    @pyqtSlot()
+    def select_first_radio(self, game_name, game_addr, state):
+        """ 选择是否先手
+        """
+        # 我方先走
+        if state == Qt.Checked:
+            self._player = 1
+        else:
+            self._player = -1
+        print("state: ", state)
+        self.start_new_game_slot()
 
 
     
@@ -211,6 +283,8 @@ class MainWindow(Ui_MainWindow, QMainWindow):
         """
         test_state = self.game.first_state.copy()
         self.game.change_state(test_state)    
+
+        
 
 if __name__ == '__main__':
     import sys

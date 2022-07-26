@@ -84,7 +84,7 @@ class ChessBoard(QWidget):
         """
         return self.curr_state
 
-    def set_state_slot(self, state:ChessState):
+    def set_state_slot(self, player:int, state:ChessState):
         """ 设置棋局状态
         """
         # print(state.size())
@@ -103,40 +103,7 @@ class ChessBoard(QWidget):
         self.update()
 
     
-    def _init_timer(self):
-        """ 初始化定时器，用于移动棋子计时
-        """
-        self._red_time = 0
-        self._black_time = 0
-        self._timer = QTimer(self)
-        self._timer.setInterval(1000)
-        self._timer.timeout.connect(self._timer_operate_slot)
-
-    @pyqtSlot()
-    def _timer_operate_slot(self):
-        """ 移动棋子计时槽函数，
-            若 self._player == -1 对移动红色棋子计时；
-            若 self._player == 1 对移动黑色棋子计时
-        """
-        if self._player == -1:
-            self._red_time += 1
-        else:
-            self._black_time += 1
-        time = self._red_time if self._player == -1 else self._black_time
-        m = int(time / 60)
-        if m < 10:
-            str_m = "0{m}".format(m=m)
-        else:
-            str_m = str(m)
-        s = time - m * 60
-        if s < 10:
-            str_s = "0{s}".format(s=s)
-        else:
-            str_s = str(s)
-        if self._player == -1:
-            self.red_time_label.setText(str_m + ":" + str_s)
-        else:
-            self.black_time_label.setText(str_m + ":" + str_s)
+    
 
     # def _setup_buttons(self):
     #     """ 绘制棋子，棋子本质为自定义按钮
@@ -181,8 +148,9 @@ class ChessBoard(QWidget):
             row = int( int((event.pos().y() - begin_y) * (self.chess_size) / 300))
             col = int((event.pos().x() - begin_x) * (self.chess_size) / 300)
             # print("event.pos:", event.pos())
-            print("coord: row:{}, col:{}".format(row, col))
-            self.mouse_clicked_signal.emit(int(row),int(col))
+            if row >= 0 and row < 6 and col >= 0 and col < 6:
+                # print("coord: row:{}, col:{}".format(row, col))
+                self.mouse_clicked_signal.emit(int(row),int(col))
 
     def paintEvent(self, QPaintEvent):
         """ 重写绘图函数，绘制棋盘

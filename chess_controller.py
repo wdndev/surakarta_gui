@@ -21,7 +21,7 @@ class ChessController(QObject):
 
     """ 信号
     """
-    state_change_signal = pyqtSignal(ChessState)
+    state_change_signal = pyqtSignal(int, ChessState)
     game_end_signal = pyqtSignal(int)
 
     def __init__(self, parent=None) -> None:
@@ -37,14 +37,19 @@ class ChessController(QObject):
         self.first_state = None     # 游戏初始状态
         self.curr_state= None       # 当前游戏状态
 
+        self.select_chess = ChessPoint(-1, -1, ChessType.EMPTY)
+
         self.gamerunning = False
+
+        # player 为 1 代表红色方（自己），-1 代表黑色（对手）
+        self._player = 1
 
         # 是否对手先手标志位
         self._is_rival_first_go = False
 
         self.game_running_queue = deque()
 
-    def start_game(self, rival_chess_color=ChessType.BLACK):
+    def start_game(self, player, rival_chess_color=ChessType.BLACK):
         """ 游戏开始
         """
         self.rival_chess_color = rival_chess_color
@@ -52,6 +57,8 @@ class ChessController(QObject):
             self.my_chess_color = ChessType.RED
         else:
             self.my_chess_color = ChessType.BLACK
+
+        self._player = player
         
         self.first_state = ChessState(self.chess_size)
         for i in range(0, self.chess_row):
@@ -66,17 +73,26 @@ class ChessController(QObject):
             self.curr_state = None
         self.curr_state = self.first_state.copy()
 
-        self.state_change_signal.emit(self.curr_state)
-        self.game_running_queue.append(self.first_state.copy())
+        self.state_change_signal.emit(self._player, self.curr_state)
+        self.game_running_queue.append((self._player, self.first_state.copy()))
 
         self.gamerunning = True
 
-        if self._is_rival_first_go:
-            # 对手先走
+        if self._player == 1:
+            # 我方走，AI
             pass
-        else :
-            # 我方走
+        elif self._player == -1:
+            # 对手走，
             pass
+
+        # if self._is_rival_first_go:
+        #     # 对手先走, 鼠标点击事件
+        #     self._player = 1
+        #     pass
+        # else :
+        #     # 我方走, AI
+        #     self._player = -1
+        #     pass
 
     def game_over(self):
         """ 游戏结束
@@ -108,15 +124,16 @@ class ChessController(QObject):
                     state.chess_counts[2] += 1
                 
 
-    @pyqtSlot()
-    def select_first_radio(self, game_name, game_addr, state):
-        """ 选择是否先手
-        """
-        if state == Qt.Checked:
-            self._is_rival_first_go = False
-        else:
-            self._is_rival_first_go = True
-        print("state: ", state)
+    # @pyqtSlot()
+    # def select_first_radio(self, game_name, game_addr, state):
+    #     """ 选择是否先手
+    #     """
+    #     if state == Qt.Checked:
+    #         self._is_rival_first_go = False
+    #     else:
+    #         self._is_rival_first_go = True
+    #     self.start_game()
+    #     print("state: ", state)
 
     def _check_coord(self, coord) -> bool:
         """ 检查坐标是否正确
@@ -129,14 +146,15 @@ class ChessController(QObject):
         """ 棋子移动
         """
         self.curr_state = state.copy()
-        self.game_running_queue.append(self.curr_state)
-        self.state_change_signal.emit(self.curr_state)
+        self.game_running_queue.append((self._player, self.curr_state))
+        self.state_change_signal.emit(self._player, self.curr_state)
 
         win_chess_color = self.who_win(self.curr_state)
         if win_chess_color != ChessType.GOON:
             self.gamerunning = False
             self.game_end_signal.emit(win_chess_color)
 
+    @pyqtSlot()
     def regret_chess_slot(self):
         """ 悔棋槽函数
         """
@@ -146,13 +164,57 @@ class ChessController(QObject):
         # print("333333333: ", len(self.checker_runing))
         # print(self.curr_state.chess_state)
         self.game_running_queue.pop()
-        self.curr_state = self.game_running_queue[-1]
+        self._player, self.curr_state = self.game_running_queue[-1]
         # print("444444444: ", len(self.checker_runing))
         # print(self.curr_state.chess_state)
-        self.state_change_signal.emit(self.curr_state)
+        self.state_change_signal.emit(self._player, self.curr_state)
 
         win_chess_color = self.who_win(self.curr_state)
         if win_chess_color != ChessType.GOON:
             self.gamerunning = False
             self.game_end_signal.emit(win_chess_color)
+
+    def mouse_clicked_slot(self, row:int, col:int):
+        """ 鼠标点击事件
+        """
+        print("recv: row:{}, col:{}".format(row, col))
+
+        if self.select_chess.x == -1 and self.select_chess.y == -1 and self.select_chess.type == ChessType.EMPTY:
+            self._to_select_chess(row, col)
+        else :
+            self._to_move_chess(row, col)
+            # if self._player == -1 and self.select_chess.type == ChessType.BLACK:
+            #     self._to_move_chess(row, col)
+            # else:
+            #     self._to_select_chess(row, col)
+    
+    def _to_select_chess(self, row : int, col : int):
+        """ 选择棋子
+        """
+        if row >= 0 and row < 6 and col >= 0 and col < 6        \
+            and self.curr_state.at(row, col) != ChessType.EMPTY :
+            self.select_chess.x = row
+            self.select_chess.y = col
+            self.select_chess.type = self.curr_state.at(row, col)
+            print("select")
+
+    def _to_move_chess(self, row : int, col : int):
+        """ 移动棋子
+        """
+        if self.select_chess.type == self.curr_state.at(row, col):
+            self._to_select_chess(row, col)
+            return
+        # print("00")
+        if self.curr_state.at(row, col) == ChessType.EMPTY:
+            tmp_state = self.curr_state.copy()
+            
+            tmp_state.chess_state[self.select_chess.x][self.select_chess.y] = ChessType.EMPTY
+            tmp_state.chess_state[row][col] = self.select_chess.type
+            print("move")
+            self._player = -self._player
+            self.change_state(tmp_state)
+            self.select_chess = ChessPoint(-1, -1, ChessType.EMPTY)
+
+
+
 
